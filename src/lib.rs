@@ -6,11 +6,10 @@ pub struct MyBox<T>(NonNull<T>);
 
 impl<T> MyBox<T> {
     pub fn new(value: T) -> Self {
-        assert_ne!(
-            mem::size_of::<T>(),
-            0,
-            "we can't handle zero-sized types yet"
-        );
+        if mem::size_of::<T>() == 0 {
+            return MyBox(NonNull::dangling());
+        }
+
         let mut memptr: *mut T = ptr::null_mut();
 
         unsafe {
@@ -55,6 +54,9 @@ unsafe impl<T> Sync for MyBox<T> where T: Sync {}
 
 impl<T> Drop for MyBox<T> {
     fn drop(&mut self) {
+        if mem::size_of::<T>() == 0 {
+            return;
+        }
         unsafe { libc::free(self.0.as_ptr().cast()) }
     }
 }
@@ -66,4 +68,16 @@ fn test_my_box() {
 
     *a = 20;
     assert_eq!(*a, 20);
+}
+
+#[test]
+fn test_zst() {
+    #[derive(Debug, PartialEq)]
+    struct A;
+
+    let mut a = MyBox::new(A);
+    assert_eq!(*a, A);
+
+    *a = A;
+    assert_eq!(*a, A);
 }
